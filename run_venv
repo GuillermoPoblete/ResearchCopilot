@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Must be sourced to affect current shell.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  echo "Run: source ./run_venv"
+  exit 1
+fi
+
+source /home/oem/work/hello-min/venv/bin/activate

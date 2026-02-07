@@ -1,0 +1,242 @@
+.shell {
+  --bg: #f6f7f7;
+  --panel: #ffffff;
+  --sidebar: #f2f3f4;
+  --text: #141414;
+  --muted: #6b6b6b;
+  --border: #e3e5e7;
+  --primary: #0f0f0f;
+  --primary-hover: #2a2a2a;
+  --secondary: #e9eaec;
+  --secondary-hover: #dfe2e6;
+  --error: #b00020;
+
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Geist", system-ui, sans-serif;
+}
+
+.sidebar {
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.brand {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sessionRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.sessionEmail {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newProjectRow {
+  display: flex;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.primary {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.primary:hover {
+  background: var(--primary-hover);
+}
+
+.secondary {
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  background: var(--secondary-hover);
+}
+
+.ghost {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.projectList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.projectItem {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.projectItemActive {
+  background: #fff;
+  border-color: var(--border);
+  font-weight: 600;
+}
+
+.main {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  padding: 24px 28px 20px;
+  height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.error {
+  background: #fff5f6;
+  border: 1px solid #f2c4c4;
+  color: var(--error);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.chatWindow {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.emptyState {
+  text-align: center;
+  color: var(--muted);
+}
+
+.message {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.messageUser {
+  background: #f7f7f7;
+}
+
+.messageAssistant {
+  background: #fff;
+}
+
+.messageRole {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.messageContent {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.composer {
+  background: var(--bg);
+  padding: 12px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.composerInner {
+  display: flex;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.composerInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  background: transparent;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}

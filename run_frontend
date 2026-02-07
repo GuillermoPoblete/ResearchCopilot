@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /home/oem/work/hello-min
+npm run dev
