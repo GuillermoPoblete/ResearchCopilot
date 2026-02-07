@@ -41,6 +41,11 @@ Base.metadata.create_all(bind=engine)
 
 
 
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
+
 
 
 
