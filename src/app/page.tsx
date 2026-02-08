@@ -43,6 +43,15 @@ export default function Home() {
     return session?.user?.email ?? "";
   }, [session]);
 
+  const readErrorDetail = async (res: Response) => {
+    try {
+      const data = await res.json();
+      return data?.detail || data?.message || `Error ${res.status}`;
+    } catch {
+      return `Error ${res.status}`;
+    }
+  };
+
   const handleAuthError = async (res: Response) => {
     if (res.status === 401) {
       setError("Sesión expirada. Volvé a iniciar sesión.");
@@ -62,7 +71,8 @@ export default function Home() {
       });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
-        throw new Error(`Error ${res.status}`);
+        const detail = await readErrorDetail(res);
+        throw new Error(detail);
       }
       const data: Project[] = await res.json();
       setProjects(data);
@@ -86,7 +96,8 @@ export default function Home() {
       });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
-        throw new Error(`Error ${res.status}`);
+        const detail = await readErrorDetail(res);
+        throw new Error(detail);
       }
       const data: Message[] = await res.json();
       setMessages(data);
@@ -111,7 +122,8 @@ export default function Home() {
       });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
-        throw new Error(`Error ${res.status}`);
+        const detail = await readErrorDetail(res);
+        throw new Error(detail);
       }
       const project: Project = await res.json();
       setProjects((prev) => [project, ...prev]);
