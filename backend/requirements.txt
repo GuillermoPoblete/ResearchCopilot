@@ -7,3 +7,4 @@ python-dotenv
 requests
 sqlalchemy
 uvicorn
+psycopg2-binary
