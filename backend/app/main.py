@@ -53,6 +53,33 @@ def healthz():
     return {"ok": True}
 
 
+@app.get("/healthz/openai")
+def healthz_openai():
+    import os
+    import httpx
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    if not api_key:
+        return JSONResponse(status_code=500, content={"ok": False, "error": "OPENAI_API_KEY missing"})
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        return {
+            "ok": resp.status_code == 200,
+            "status": resp.status_code,
+            "body": resp.text[:1000],
+        }
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": f"{type(exc).__name__}: {exc}"},
+        )
+
+
 
 
 
