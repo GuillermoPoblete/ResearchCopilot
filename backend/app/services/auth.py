@@ -12,7 +12,7 @@ _DEFAULT_CLIENT_SECRET = os.path.abspath(
     )
 )
 GOOGLE_CLIENT_SECRET_FILE = os.getenv("GOOGLE_CLIENT_SECRET_FILE", _DEFAULT_CLIENT_SECRET)
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+print(f"[auth] GOOGLE_CLIENT_ID set: {bool(os.getenv('GOOGLE_CLIENT_ID'))}", flush=True)
 
 
 def _load_client_id_from_file():
@@ -25,8 +25,13 @@ def _load_client_id_from_file():
 
 
 def verify_google_token(token: str) -> dict:
-    client_id = GOOGLE_CLIENT_ID or _load_client_id_from_file()
+    client_id = os.getenv("GOOGLE_CLIENT_ID") or _load_client_id_from_file()
     if not client_id:
+        file_exists = os.path.exists(GOOGLE_CLIENT_SECRET_FILE)
+        print(
+            f"[auth] missing client_id env; secret file exists: {file_exists}",
+            flush=True,
+        )
         raise HTTPException(status_code=500, detail="Google client id not configured")
 
     try:
