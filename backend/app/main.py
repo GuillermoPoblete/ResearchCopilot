@@ -6,7 +6,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 import uuid
 from typing import List
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -39,6 +39,13 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 
+
+
+@app.exception_handler(Exception)
+async def log_exception(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    return HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.get("/healthz")
