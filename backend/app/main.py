@@ -189,21 +189,26 @@ def create_project(request: CreateProjectRequest, user_payload: dict = Depends(_
 
 @app.get("/projects")
 def list_projects(user_payload: dict = Depends(_get_google_user)):
-    db = SessionLocal()
-    user_id = _get_user_id(user_payload)
-    projects = (
-        db.query(Project)
-        .filter(Project.user_id == user_id)
-        .order_by(Project.created_at)
-        .all()
-    )
-    db.close()
+    try:
+        db = SessionLocal()
+        user_id = _get_user_id(user_payload)
+        projects = (
+            db.query(Project)
+            .filter(Project.user_id == user_id)
+            .order_by(Project.created_at)
+            .all()
+        )
+        db.close()
 
-    return [
-        {
-            "id": p.id,
-            "name": p.name,
-            "user_id": p.user_id,
-        }
-        for p in projects
-    ]
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "user_id": p.user_id,
+            }
+            for p in projects
+        ]
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
