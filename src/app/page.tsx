@@ -35,6 +35,13 @@ export default function Home() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [debugInfo, setDebugInfo] = useState({
+    lastRequest: "",
+    lastStatus: 0,
+    lastContentType: "",
+    lastDetail: "",
+    lastAuthHeader: false,
+  });
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const token = session?.id_token;
@@ -50,6 +57,20 @@ export default function Home() {
     } catch {
       return `Error ${res.status}`;
     }
+  };
+
+  const updateDebug = (input: {
+    lastRequest: string;
+    lastStatus: number;
+    lastContentType: string;
+    lastDetail?: string;
+    lastAuthHeader: boolean;
+  }) => {
+    setDebugInfo((prev) => ({
+      ...prev,
+      ...input,
+      lastDetail: input.lastDetail ?? prev.lastDetail,
+    }));
   };
 
   const handleAuthError = async (res: Response) => {
@@ -69,9 +90,22 @@ export default function Home() {
       const res = await fetch(`${BACKEND_BASE_URL}/projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      updateDebug({
+        lastRequest: "GET /projects",
+        lastStatus: res.status,
+        lastContentType: res.headers.get("content-type") || "",
+        lastAuthHeader: true,
+      });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
         const detail = await readErrorDetail(res);
+        updateDebug({
+          lastRequest: "GET /projects",
+          lastStatus: res.status,
+          lastContentType: res.headers.get("content-type") || "",
+          lastDetail: detail,
+          lastAuthHeader: true,
+        });
         throw new Error(detail);
       }
       const data: Project[] = await res.json();
@@ -94,9 +128,22 @@ export default function Home() {
       const res = await fetch(`${BACKEND_BASE_URL}/projects/${project.id}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      updateDebug({
+        lastRequest: "GET /projects/:id/messages",
+        lastStatus: res.status,
+        lastContentType: res.headers.get("content-type") || "",
+        lastAuthHeader: true,
+      });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
         const detail = await readErrorDetail(res);
+        updateDebug({
+          lastRequest: "GET /projects/:id/messages",
+          lastStatus: res.status,
+          lastContentType: res.headers.get("content-type") || "",
+          lastDetail: detail,
+          lastAuthHeader: true,
+        });
         throw new Error(detail);
       }
       const data: Message[] = await res.json();
@@ -120,9 +167,22 @@ export default function Home() {
         },
         body: JSON.stringify({ name: newProjectName.trim() }),
       });
+      updateDebug({
+        lastRequest: "POST /projects",
+        lastStatus: res.status,
+        lastContentType: res.headers.get("content-type") || "",
+        lastAuthHeader: true,
+      });
       if (!res.ok) {
         if (await handleAuthError(res)) return;
         const detail = await readErrorDetail(res);
+        updateDebug({
+          lastRequest: "POST /projects",
+          lastStatus: res.status,
+          lastContentType: res.headers.get("content-type") || "",
+          lastDetail: detail,
+          lastAuthHeader: true,
+        });
         throw new Error(detail);
       }
       const project: Project = await res.json();
@@ -158,10 +218,23 @@ export default function Home() {
     });
 
     const contentType = res.headers.get("content-type") || "";
+    updateDebug({
+      lastRequest: "POST /chat/stream",
+      lastStatus: res.status,
+      lastContentType: contentType,
+      lastAuthHeader: true,
+    });
     if (contentType.includes("application/json")) {
       try {
         const data = await res.json();
         const detail = data?.detail || data?.message || "Respuesta JSON inesperada";
+        updateDebug({
+          lastRequest: "POST /chat/stream",
+          lastStatus: res.status,
+          lastContentType: contentType,
+          lastDetail: detail,
+          lastAuthHeader: true,
+        });
         setError(`Respuesta JSON inesperada: ${detail}`);
       } catch {
         setError("Respuesta JSON inesperada");
@@ -175,6 +248,13 @@ export default function Home() {
         setStreaming(false);
         return;
       }
+      updateDebug({
+        lastRequest: "POST /chat/stream",
+        lastStatus: res.status,
+        lastContentType: contentType,
+        lastDetail: `Error al enviar mensaje: ${res.status}`,
+        lastAuthHeader: true,
+      });
       setError(`Error al enviar mensaje: ${res.status}`);
       setStreaming(false);
       return;
@@ -307,6 +387,19 @@ export default function Home() {
         </header>
 
         {error && <div className={styles.error}>{error}</div>}
+        <div className={styles.debugPanel}>
+          <div>
+            <strong>Debug</strong>
+          </div>
+          <div>session: {status}</div>
+          <div>id_token: {token ? `presente (${token.length})` : "ausente"}</div>
+          <div>backend: {BACKEND_BASE_URL}</div>
+          <div>último request: {debugInfo.lastRequest || "-"}</div>
+          <div>status: {debugInfo.lastStatus || "-"}</div>
+          <div>content-type: {debugInfo.lastContentType || "-"}</div>
+          <div>auth header: {debugInfo.lastAuthHeader ? "sí" : "no"}</div>
+          <div>detail: {debugInfo.lastDetail || "-"}</div>
+        </div>
 
         <section className={styles.chatWindow}>
           {loadingMessages ? (

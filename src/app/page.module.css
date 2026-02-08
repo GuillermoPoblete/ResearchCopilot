@@ -156,6 +156,19 @@
   border-radius: 8px;
 }
 
+.debugPanel {
+  background: #11151b;
+  border: 1px solid #243040;
+  color: #c9d5e3;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: grid;
+  gap: 4px;
+}
+
 .chatWindow {
   background: var(--panel);
   border: 1px solid var(--border);
