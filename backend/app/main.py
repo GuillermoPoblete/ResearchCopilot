@@ -9,7 +9,7 @@ from typing import List
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from app.schemas.chat import ChatRequest
 from app.services.auth import verify_google_token
@@ -45,7 +45,7 @@ Base.metadata.create_all(bind=engine)
 async def log_exception(request: Request, exc: Exception):
     import traceback
     traceback.print_exc()
-    return HTTPException(status_code=500, detail="Internal Server Error")
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 @app.get("/healthz")
