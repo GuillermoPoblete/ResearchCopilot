@@ -117,6 +117,11 @@ def chat_stream(request: ChatRequest, user_payload: dict = Depends(_get_google_u
             ):
                 full_response += token
                 yield f"data: {token}\n\n"
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            err_text = f"[error] {type(exc).__name__}: {exc}"
+            yield f"data: {err_text}\n\n"
         finally:
             if full_response.strip():
                 db.add(
