@@ -215,6 +215,9 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (status !== "loading") {
+      console.log("[auth] session id_token present:", Boolean(session?.id_token));
+    }
     if (token) {
       loadProjects();
     } else {
