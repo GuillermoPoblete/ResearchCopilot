@@ -13,6 +13,7 @@ class Project(Base):
     user_id = Column(String, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     messages = relationship(
         "Message",

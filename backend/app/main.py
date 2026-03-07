@@ -4,12 +4,14 @@ from pathlib import Path
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 import uuid
+from datetime import datetime
 from typing import List
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+from sqlalchemy import inspect, text
 
 from app.schemas.chat import ChatRequest
 from app.services.auth import verify_google_token
@@ -26,6 +28,10 @@ class CreateProjectRequest(BaseModel):
     name: str
 
 
+class RenameProjectRequest(BaseModel):
+    name: str
+
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +43,22 @@ app.add_middleware(
 
 # Crear tablas
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_soft_delete_column():
+    # Keep existing local DBs compatible without requiring a migration tool.
+    inspector = inspect(engine)
+    if "projects" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("projects")}
+    if "deleted_at" in columns:
+        return
+    deleted_col_type = "TIMESTAMP" if engine.dialect.name == "postgresql" else "DATETIME"
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE projects ADD COLUMN deleted_at {deleted_col_type}"))
+
+
+_ensure_soft_delete_column()
 
 
 
@@ -53,31 +75,6 @@ def healthz():
     return {"ok": True}
 
 
-@app.get("/healthz/openai")
-def healthz_openai():
-    import os
-    import httpx
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    if not api_key:
-        return JSONResponse(status_code=500, content={"ok": False, "error": "OPENAI_API_KEY missing"})
-
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.get(
-                f"{base_url}/models",
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
-        return {
-            "ok": resp.status_code == 200,
-            "status": resp.status_code,
-            "body": resp.text[:1000],
-        }
-    except Exception as exc:
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "error": f"{type(exc).__name__}: {exc}"},
-        )
 
 
 
@@ -94,13 +91,33 @@ def _get_google_user(authorization: str = Header(...)) -> dict:
 def _get_user_id(user_payload: dict) -> str:
     return user_payload.get("sub") or user_payload.get("email") or "unknown-user"
 
+
+def _get_active_project(db, project_id: str, user_id: str):
+    return (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.user_id == user_id,
+            Project.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+
 @app.post("/chat/stream")
 def chat_stream(request: ChatRequest, user_payload: dict = Depends(_get_google_user)):
     db = SessionLocal()
     user_id = _get_user_id(user_payload)
 
     # Asegurar proyecto
-    project = db.query(Project).filter(Project.id == request.project_id).first()
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == request.project_id,
+            Project.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not project:
         project = Project(
             id=request.project_id,
@@ -144,11 +161,9 @@ def chat_stream(request: ChatRequest, user_payload: dict = Depends(_get_google_u
             ):
                 full_response += token
                 yield f"data: {token}\n\n"
-        except Exception as exc:
+        except Exception:
             import traceback
             traceback.print_exc()
-            err_text = f"[error] {type(exc).__name__}: {exc}"
-            yield f"data: {err_text}\n\n"
         finally:
             if full_response.strip():
                 db.add(
@@ -176,8 +191,8 @@ def get_project_messages(
     db = SessionLocal()
 
     user_id = _get_user_id(user_payload)
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project or project.user_id != user_id:
+    project = _get_active_project(db, project_id, user_id)
+    if not project:
         db.close()
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -219,6 +234,77 @@ def create_project(request: CreateProjectRequest, user_payload: dict = Depends(_
 
     return result
 
+
+@app.patch("/projects/{project_id}")
+def rename_project(
+    project_id: str,
+    request: RenameProjectRequest,
+    user_payload: dict = Depends(_get_google_user),
+):
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Project name required")
+
+    db = SessionLocal()
+    user_id = _get_user_id(user_payload)
+    project = _get_active_project(db, project_id, user_id)
+    if not project:
+        db.close()
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.name = name
+    db.commit()
+    db.refresh(project)
+    result = {"id": project.id, "name": project.name, "user_id": project.user_id}
+    db.close()
+    return result
+
+
+@app.delete("/projects/{project_id}")
+def delete_project(
+    project_id: str,
+    user_payload: dict = Depends(_get_google_user),
+):
+    db = SessionLocal()
+    user_id = _get_user_id(user_payload)
+    project = _get_active_project(db, project_id, user_id)
+    if not project:
+        db.close()
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.deleted_at = datetime.utcnow()
+    db.commit()
+    db.close()
+    return {"ok": True}
+
+
+@app.post("/projects/{project_id}/restore")
+def restore_project(
+    project_id: str,
+    user_payload: dict = Depends(_get_google_user),
+):
+    db = SessionLocal()
+    user_id = _get_user_id(user_payload)
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.user_id == user_id,
+            Project.deleted_at.is_not(None),
+        )
+        .first()
+    )
+    if not project:
+        db.close()
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.deleted_at = None
+    db.commit()
+    db.refresh(project)
+    result = {"id": project.id, "name": project.name, "user_id": project.user_id}
+    db.close()
+    return result
+
 @app.get("/projects")
 def list_projects(user_payload: dict = Depends(_get_google_user)):
     try:
@@ -226,7 +312,10 @@ def list_projects(user_payload: dict = Depends(_get_google_user)):
         user_id = _get_user_id(user_payload)
         projects = (
             db.query(Project)
-            .filter(Project.user_id == user_id)
+            .filter(
+                Project.user_id == user_id,
+                Project.deleted_at.is_(None),
+            )
             .order_by(Project.created_at)
             .all()
         )
