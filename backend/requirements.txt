@@ -1,7 +1,10 @@
 fastapi
 google-auth
 google-auth-oauthlib
+matplotlib
+numpy
 openai
+pandas
 pydantic
 python-dotenv
 requests
