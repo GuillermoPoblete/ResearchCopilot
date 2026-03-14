@@ -6,6 +6,8 @@ import styles from "./page.module.css";
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://127.0.0.1:8000";
 const GOOGLE_SHEETS_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+const ANALYSIS_INTENT_RE =
+  /\b(media|promedio|mean|mediana|desviacion|desviación|varianza|correlacion|correlación|regresion|regresión|histograma|grafico|gráfico|scatter|plot|estadistic|estadístic|calcula|analiza)\b/i;
 
 type Project = {
   id: string;
@@ -16,6 +18,27 @@ type Project = {
 type Message = {
   role: "system" | "user" | "assistant";
   content: string;
+};
+
+type AnalysisRunResponse = {
+  status: "ok" | "error";
+  error: string | null;
+  dataset_context?: {
+    sheet_name?: string;
+    row_count?: number;
+    column_count?: number;
+  };
+  generated_code?: string;
+  result?: {
+    summary?: string;
+    metrics?: Record<string, unknown>;
+    tables?: Array<{
+      name?: string;
+      columns?: string[];
+      rows?: unknown[][];
+    }>;
+    diagnostics?: string[];
+  };
 };
 
 const makeId = () => {
@@ -279,6 +302,49 @@ export default function Home() {
     return lines.join("\n");
   };
 
+  const detectAnalysisIntent = (text: string) => ANALYSIS_INTENT_RE.test(text);
+
+  const findLatestSheetUrl = (allMessages: Message[], currentPrompt: string): string | null => {
+    const pool = [...allMessages.map((m) => m.content), currentPrompt];
+    for (let i = pool.length - 1; i >= 0; i--) {
+      const match = pool[i].match(GOOGLE_SHEETS_URL_RE);
+      if (match) return match[0];
+    }
+    return null;
+  };
+
+  const formatAnalysisResponse = (data: AnalysisRunResponse): string => {
+    if (data.status !== "ok") {
+      return `No se pudo ejecutar el analisis: ${data.error || "error desconocido"}`;
+    }
+
+    const summary = data.result?.summary || "Analisis ejecutado correctamente.";
+    const metrics = data.result?.metrics || {};
+    const metricLines = Object.entries(metrics).map(([k, v]) => `- ${k}: ${String(v)}`);
+    const firstTable = data.result?.tables?.[0];
+    const diagnostics = data.result?.diagnostics || [];
+    const datasetInfo =
+      data.dataset_context?.sheet_name || data.dataset_context?.row_count != null
+        ? `Dataset: ${data.dataset_context?.sheet_name || "Hoja 1"} | filas: ${
+            data.dataset_context?.row_count ?? "n/a"
+          } | columnas: ${data.dataset_context?.column_count ?? "n/a"}`
+        : "";
+
+    const tablePreview =
+      firstTable && firstTable.columns && firstTable.rows
+        ? [
+            "",
+            `Tabla: ${firstTable.name || "resultado"}`,
+            firstTable.columns.join(" | "),
+            ...(firstTable.rows.slice(0, 8).map((r) => r.map((c) => String(c ?? "")).join(" | "))),
+          ].join("\n")
+        : "";
+
+    const diagBlock = diagnostics.length ? `\n\nDiagnosticos:\n- ${diagnostics.join("\n- ")}` : "";
+    const metricBlock = metricLines.length ? `\n\nMetricas:\n${metricLines.join("\n")}` : "";
+    return [summary, datasetInfo, metricBlock, tablePreview, diagBlock].filter(Boolean).join("\n");
+  };
+
   const sendMessage = async () => {
     if (!prompt.trim() || !token || !activeProject || streaming) return;
     const userMsg: Message = { role: "user", content: prompt.trim() };
@@ -289,6 +355,53 @@ export default function Home() {
 
     let nextMessages = nextMessagesBase;
     let llmMessages: Message[] = nextMessagesBase;
+    const promptText = prompt.trim();
+    const shouldRunAnalysis = detectAnalysisIntent(promptText);
+    const latestSheetUrl = findLatestSheetUrl(nextMessagesBase, promptText);
+
+    if (shouldRunAnalysis) {
+      try {
+        const analysisRes = await fetch(`${BACKEND_BASE_URL}/analysis/run`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: activeProject.id,
+            prompt: promptText,
+            sheet_url: latestSheetUrl || undefined,
+            google_access_token: googleAccessToken || undefined,
+          }),
+        });
+
+        if (!analysisRes.ok) {
+          if (await handleAuthError(analysisRes)) {
+            setStreaming(false);
+            return;
+          }
+          const detail = await readErrorDetail(analysisRes);
+          throw new Error(detail);
+        }
+
+        const analysisData: AnalysisRunResponse = await analysisRes.json();
+        const analysisText = formatAnalysisResponse(analysisData);
+        setMessages((prev) => [...prev, { role: "assistant", content: analysisText }]);
+        setStreaming(false);
+        return;
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Fallo la ejecucion del analisis en Python: ${(err as Error).message}`,
+          },
+        ]);
+        setStreaming(false);
+        return;
+      }
+    }
+
     const sheetMatch = prompt.trim().match(GOOGLE_SHEETS_URL_RE);
     if (sheetMatch) {
       try {

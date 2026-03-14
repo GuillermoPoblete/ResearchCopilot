@@ -14,8 +14,12 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy import inspect, text
 
 from app.schemas.chat import ChatRequest
+from app.schemas.analysis import AnalysisRunRequest
 from app.services.auth import verify_google_token
 from app.services.llm_services import stream_chat_completion
+from app.services.dataset_store import dataset_store
+from app.services.google_sheets import load_first_sheet_dataframe
+from app.services.analysis_runtime import generate_analysis_code, execute_analysis_code
 
 from app.db.database import engine, SessionLocal
 from app.db.models import Base, Project, Message
@@ -304,6 +308,64 @@ def restore_project(
     result = {"id": project.id, "name": project.name, "user_id": project.user_id}
     db.close()
     return result
+
+
+@app.post("/analysis/run")
+def run_analysis(
+    request: AnalysisRunRequest,
+    user_payload: dict = Depends(_get_google_user),
+):
+    user_id = _get_user_id(user_payload)
+    db = SessionLocal()
+    project = _get_active_project(db, request.project_id, user_id)
+    db.close()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    entry = dataset_store.get(user_id=user_id, project_id=request.project_id)
+    if request.sheet_url:
+        if not request.google_access_token:
+            raise HTTPException(
+                status_code=400,
+                detail="google_access_token is required when sheet_url is provided",
+            )
+        df, context = load_first_sheet_dataframe(request.sheet_url, request.google_access_token)
+        entry = dataset_store.set(
+            user_id=user_id,
+            project_id=request.project_id,
+            sheet_url=request.sheet_url,
+            context=context,
+            dataframe=df,
+        )
+
+    if not entry:
+        raise HTTPException(
+            status_code=400,
+            detail="No dataset loaded for this project. Provide sheet_url and google_access_token.",
+        )
+
+    try:
+        code = generate_analysis_code(request.prompt, entry.context)
+        execution = execute_analysis_code(
+            code=code,
+            dataframe=entry.dataframe,
+            context=entry.context,
+            timeout_sec=30,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
+
+    return {
+        "status": execution["status"],
+        "error": execution["error"],
+        "dataset_context": entry.context,
+        "generated_code": code,
+        "result": execution["result"],
+        "stdout": execution["stdout"],
+        "stderr": execution["stderr"],
+    }
 
 @app.get("/projects")
 def list_projects(user_payload: dict = Depends(_get_google_user)):
